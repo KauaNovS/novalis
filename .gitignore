@@ -1,12 +1,7 @@
 node_modules/
 .next/
-out/
-.env
-.env.local
-.env*.local
-prisma/dev.db
-prisma/dev.db-journal
 npm-cache/
-*.log
+*.tsbuildinfo
+.env
+.env*.local
 .DS_Store
-Thumbs.db
