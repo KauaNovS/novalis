@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import fs from 'fs/promises';
 import path from 'path';
+// @ts-ignore - pdf-parse não possui declarações de tipo próprias
 import pdfParse from 'pdf-parse';
 
 export async function POST(
@@ -48,7 +49,7 @@ export async function POST(
 }
 
 function simpleExtract(text: string) {
-  const units = [];
+  const units: { unitNumber: string; price: number | null }[] = [];
   const priceRegex = /R\$\s*([\d.]+(?:,\d{2})?)/g;
   const unitRegex = /(?:unidade|apto|ap)\s*[:\-]?\s*(\d+)/gi;
 
@@ -61,7 +62,7 @@ function simpleExtract(text: string) {
   }
 
   // Atribuir preços às unidades encontradas (simplificado)
-  const prices = [];
+  const prices: number[] = [];
   while ((match = priceRegex.exec(text)) !== null) {
     prices.push(parseFloat(match[1].replace(/\./g, '').replace(',', '.')));
   }

@@ -52,21 +52,21 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
-    const byStatus = byStatusRaw.map((r) => ({ key: r.status, count: r._count }));
-    const byStage = byStageRaw.map((r) => ({ key: r.stage, count: r._count }));
-    const byContactStatus = byContactStatusRaw.map((r) => ({
+    const byStatus = byStatusRaw.map((r: any) => ({ key: r.status, count: r._count }));
+    const byStage = byStageRaw.map((r: any) => ({ key: r.stage, count: r._count }));
+    const byContactStatus = byContactStatusRaw.map((r: any) => ({
       key: r.contactStatus || 'NAO_CONTACTADO',
       count: r._count,
     }));
 
-    const naoContactado = byContactStatus.find((c) => c.key === 'NAO_CONTACTADO')?.count || 0;
-    const totalLeads = byStatus.find((s) => s.key === 'LEAD')?.count || 0;
+    const naoContactado = byContactStatus.find((c: any) => c.key === 'NAO_CONTACTADO')?.count || 0;
+    const totalLeads = byStatus.find((s: any) => s.key === 'LEAD')?.count || 0;
     const totalContacted = totalClients - naoContactado;
-    const meetingsScheduled = byContactStatus.find((c) => c.key === 'REUNIAO_AGENDADA')?.count || 0;
+    const meetingsScheduled = byContactStatus.find((c: any) => c.key === 'REUNIAO_AGENDADA')?.count || 0;
 
-    const callRows = interactions.filter((i) => i.type === 'CALL' || i.type === 'WHATSAPP_CALL');
-    const msgRows = interactions.filter((i) => i.type === 'WHATSAPP_MSG');
-    const fupRows = interactions.filter((i) => i.contactType === 'FUP');
+    const callRows = interactions.filter((i: any) => i.type === 'CALL' || i.type === 'WHATSAPP_CALL');
+    const msgRows = interactions.filter((i: any) => i.type === 'WHATSAPP_MSG');
+    const fupRows = interactions.filter((i: any) => i.contactType === 'FUP');
 
     const dedupedCalls = dedupeByClientDay(callRows);
     const dedupedMsgs = dedupeByClientDay(msgRows);
@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
     const messagesToday = dedupedMsgs.filter((d) => d.day === todayKey).length;
     const followupsToday = dedupedFups.filter((d) => d.day === todayKey).length;
 
-    const clientsInFollowUp = new Set(fupRows.map((f) => f.clientId)).size;
+    const clientsInFollowUp = new Set(fupRows.map((f: any) => f.clientId)).size;
 
     // Como não há campos de resultado, definimos 0 para esses totais
     const successCount = 0;
@@ -117,7 +117,7 @@ export async function GET(req: NextRequest) {
       byStage,
       byContactStatus,
       trend,
-      timeline: recentInteractions.map((i) => ({
+      timeline: recentInteractions.map((i: any) => ({
         id: i.id,
         clientId: i.client.id,
         clientName: i.client.name,
