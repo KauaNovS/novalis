@@ -1,0 +1,388 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String        @id @default(cuid())
+  email          String        @unique
+  password       String
+  name           String
+  role           String        @default("CLIENT")
+  userType       String?       @default("INDIVIDUAL")
+  phone          String?
+  avatar         String?
+  active         Boolean       @default(true)
+  lastLogin      DateTime?
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  permissions    String        @default("[]")
+  teamId         String?
+  team           Team?         @relation("TeamMembers", fields: [teamId], references: [id])
+  ledTeams       Team[]        @relation("TeamLeader")
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  clients       Client[]
+  deals         Deal[]
+  activities    Activity[]
+  gamification  GamificationProfile?
+  notifications Notification[]
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  name      String
+  leaderId  String
+  leader    User     @relation("TeamLeader", fields: [leaderId], references: [id])
+  members   User[]   @relation("TeamMembers")
+  createdAt DateTime @default(now())
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  active    Boolean  @default(true)
+  type      String?  @default("COMPANY") // COMPANY, DEVELOPER, AGENCY, PARTNER
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users    User[]
+  projects Project[]
+}
+
+model Client {
+  id              String   @id @default(cuid())
+  name            String
+  email           String?
+  phone           String?
+  birthDate       DateTime?
+  notes           String?
+  tags            String   @default("[]")
+  score           Int      @default(0)
+  status          String   @default("LEAD")
+  stage           String   @default("COLD")
+  contactStatus   String   @default("NAO_CONTACTADO")
+  source          String?
+  profile         String?
+  interestType    String?
+  investorProfile String?
+  investmentValue Float?
+  region          String?
+  topology        String?
+  typology        String?
+  areaInterest    Float?
+  assignedTo      String?
+  assignedUser    User?    @relation(fields: [assignedTo], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  deals           Deal[]
+  interactions    ClientInteraction[]
+  visits          PropertyVisit[]
+  activities      Activity[]
+  unitsOfInterest UnitOfInterest[]
+}
+
+model ClientInteraction {
+  id          String   @id @default(cuid())
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  type        String
+  notes       String?
+  success     Boolean?
+  level       String?
+  contactType String?
+  answered    Boolean?
+  blocked     Boolean?
+  reason      String?
+  createdBy   String
+  createdAt   DateTime @default(now())
+}
+
+model UnitOfInterest {
+  id       String @id @default(cuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  unitId   String
+  unit     Unit   @relation(fields: [unitId], references: [id], onDelete: Cascade)
+}
+
+model PropertyVisit {
+  id          String   @id @default(cuid())
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  unitId      String
+  unit        Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  scheduledAt DateTime
+  status      String   @default("SCHEDULED")
+  feedback    String?
+  rating      Int?
+  createdAt   DateTime @default(now())
+}
+
+model Deal {
+  id           String   @id @default(cuid())
+  title        String
+  stage        String   @default("LEAD")
+  value        Float?
+  probability  Int      @default(0)
+  clientId     String
+  client       Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  unitId       String?
+  unit         Unit?    @relation(fields: [unitId], references: [id])
+  assignedTo   String
+  assignedUser User     @relation(fields: [assignedTo], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  activities Activity[]
+}
+
+model Activity {
+  id          String    @id @default(cuid())
+  type        String
+  subject     String
+  description String?
+  status      String    @default("PENDING")
+  priority    String    @default("MEDIUM")
+  dueDate     DateTime?
+  completedAt DateTime?
+  clientId    String?
+  client      Client?   @relation(fields: [clientId], references: [id])
+  dealId      String?
+  deal        Deal?     @relation(fields: [dealId], references: [id])
+  assignedTo  String
+  assignedUser User     @relation(fields: [assignedTo], references: [id])
+  createdBy   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Project {
+  id             String        @id @default(cuid())
+  name           String
+  slug           String        @unique
+  description    String?
+  status         String        @default("DRAFT")
+  projectStage   String?
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  address        String?
+  addressNumber  String?
+  neighborhood   String?
+  city           String?
+  state          String?
+  zipCode        String?
+  zone           String?
+  latitude       Float?
+  longitude      Float?
+  deliveryDate   DateTime?
+  imageUrl       String?
+  totalUnits     Int           @default(0)
+  totalTowers    Int           @default(0)
+  developerId    String?
+  developer      Developer?    @relation(fields: [developerId], references: [id])
+  builderId      String?
+  builder        Builder?      @relation(fields: [builderId], references: [id])
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  towers         Tower[]
+  units          Unit[]
+  documents      Document[]
+  images         ProjectImage[]
+}
+
+model ProjectImage {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  url       String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model Tower {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name       String
+  floors     Int
+  unitsCount Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  units Unit[]
+}
+
+model Unit {
+  id                 String   @id @default(cuid())
+  projectId          String
+  project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  towerId            String
+  tower              Tower    @relation(fields: [towerId], references: [id], onDelete: Cascade)
+  unitNumber         String
+  floor              Int
+  typology           String?
+  topology           String?
+  floorplanUrl       String?
+  imageUrl           String?
+  bedrooms           Int
+  area               Float
+  parkingSpaces      Int      @default(0)
+  status             String   @default("AVAILABLE")
+  currentPrice       Float?
+  pricePerSquareMeter Float?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  priceHistory  PriceHistory[]
+  statusHistory StatusHistory[]
+  deals         Deal[]
+  visits        PropertyVisit[]
+  unitsOfInterest UnitOfInterest[]
+}
+
+model PriceHistory {
+  id        String   @id @default(cuid())
+  unitId    String
+  unit      Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  oldPrice  Float?
+  newPrice  Float?
+  changedAt DateTime @default(now())
+  changedBy String
+}
+
+model StatusHistory {
+  id        String   @id @default(cuid())
+  unitId    String
+  unit      Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  oldStatus String?
+  newStatus String
+  changedAt DateTime @default(now())
+  changedBy String
+}
+
+model Document {
+  id         String   @id @default(cuid())
+  name       String
+  type       String
+  mimeType   String
+  size       Int
+  path       String
+  status     String   @default("UPLOADED")
+  uploadedBy String
+  uploadedAt DateTime @default(now())
+  projectId  String?
+  project    Project? @relation(fields: [projectId], references: [id])
+  data       String?
+}
+
+model GamificationProfile {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id])
+  level         Int       @default(1)
+  xp            Int       @default(0)
+  totalXp       Int       @default(0)
+  rank          String    @default("Iniciante")
+  streak        Int       @default(0)
+  bestStreak    Int       @default(0)
+  lastActivityAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  badges UserBadge[]
+}
+
+model Badge {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  icon        String
+  category    String
+  rarity      String
+  createdAt   DateTime @default(now())
+
+  userBadges UserBadge[]
+}
+
+model UserBadge {
+  id        String   @id @default(cuid())
+  profileId String
+  profile   GamificationProfile @relation(fields: [profileId], references: [id])
+  badgeId   String
+  badge     Badge    @relation(fields: [badgeId], references: [id])
+  earnedAt  DateTime @default(now())
+
+  @@unique([profileId, badgeId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Developer {
+  id          String   @id @default(cuid())
+  name        String
+  legalName   String?
+  document    String?
+  creci       String?
+  description String?
+  website     String?
+  logo        String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  projects    Project[]
+}
+
+model Builder {
+  id          String   @id @default(cuid())
+  name        String
+  legalName   String?
+  document    String?
+  description String?
+  website     String?
+  logo        String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  projects    Project[]
+}
+
+model PartnerCompany {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  document  String?
+  password  String
+  active    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  projects  PartnerProject[]
+}
+
+model PartnerProject {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     PartnerCompany @relation(fields: [companyId], references: [id])
+  name        String
+  description String?
+  status      String   @default("PENDING")
+  createdAt   DateTime @default(now())
+}
