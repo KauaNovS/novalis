@@ -83,6 +83,28 @@ export async function PUT(
       }
     }
 
+    // birthDate é DateTime? no schema — string vazia quebra o Prisma
+    // ("" não é uma data válida). Normaliza: vazio/ausente -> null,
+    // string preenchida -> Date de verdade.
+    if ('birthDate' in updateData) {
+      updateData.birthDate = updateData.birthDate ? new Date(updateData.birthDate) : null;
+    }
+
+    // investmentValue e areaInterest são Float? — mesma armadilha se
+    // vier string vazia do formulário.
+    if ('investmentValue' in updateData) {
+      updateData.investmentValue =
+        updateData.investmentValue === '' || updateData.investmentValue === null
+          ? null
+          : Number(updateData.investmentValue);
+    }
+    if ('areaInterest' in updateData) {
+      updateData.areaInterest =
+        updateData.areaInterest === '' || updateData.areaInterest === null
+          ? null
+          : Number(updateData.areaInterest);
+    }
+
     const client = await prisma.client.update({
       where: { id },
       data: updateData,
