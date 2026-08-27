@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
       byContactStatusRaw,
       interactions,
       recentInteractions,
+      blockedClientRows,
     ] = await Promise.all([
       prisma.client.count(),
       prisma.client.groupBy({ by: ['status'], _count: true }),
@@ -42,6 +43,9 @@ export async function GET(req: NextRequest) {
           clientId: true,
           type: true,
           contactType: true,
+          success: true,
+          blocked: true,
+          answered: true,
           createdAt: true,
         },
       }),
@@ -49,6 +53,12 @@ export async function GET(req: NextRequest) {
         orderBy: { createdAt: 'desc' },
         take: 20,
         include: { client: { select: { id: true, name: true } } },
+      }),
+      // "ao longo do histórico" -> não limitado aos 90 dias da query acima
+      prisma.clientInteraction.findMany({
+        where: { blocked: true },
+        select: { clientId: true },
+        distinct: ['clientId'],
       }),
     ]);
 
@@ -79,10 +89,14 @@ export async function GET(req: NextRequest) {
 
     const clientsInFollowUp = new Set(fupRows.map((f: any) => f.clientId)).size;
 
-    // Como não há campos de resultado, definimos 0 para esses totais
-    const successCount = 0;
-    const failureCount = 0;
-    const blockedCount = 0;
+    // Antes fixos em 0 com o comentário "não há campos de resultado" — os
+    // campos existem no schema (success/blocked), só não estavam sendo
+    // usados. success/failure são sobre os últimos 90 dias (mesma janela
+    // do resto do dashboard); blocked é "ao longo do histórico" (sem
+    // limite de data), como o texto do card já dizia.
+    const successCount = interactions.filter((i: any) => i.success === true).length;
+    const failureCount = interactions.filter((i: any) => i.success === false).length;
+    const blockedCount = blockedClientRows.length;
 
     const trend: { date: string; calls: number; messages: number; followups: number }[] = [];
     for (let i = 6; i >= 0; i--) {
@@ -122,7 +136,10 @@ export async function GET(req: NextRequest) {
         clientId: i.client.id,
         clientName: i.client.name,
         type: i.type,
-        contactType: i.contactType,
+        contactMode: i.contactType,
+        answered: i.answered,
+        success: i.success,
+        blocked: i.blocked,
         reason: i.reason,
         notes: i.notes,
         createdAt: i.createdAt,
