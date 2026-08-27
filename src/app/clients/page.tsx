@@ -133,12 +133,41 @@ export default function ClientsPage() {
   const [investorFilter, setInvestorFilter] = useState<string[]>([]);
   const [sourceFilter, setSourceFilter] = useState<string[]>([]);
   const [dateFilter, setDateFilter] = useState("");
+  // Filtros vindos dos cards clicáveis do dashboard (/crm) — não têm UI
+  // própria aqui, só chegam via query string do link.
+  const [followUpFilter, setFollowUpFilter] = useState(false);
+  const [outcomeFilter, setOutcomeFilter] = useState<"success" | "failure" | "">("");
+  const [blockedFilter, setBlockedFilter] = useState(false);
+  const [todayFilter, setTodayFilter] = useState<{ type: string } | null>(null);
 
   // UI state
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [sortBy, setSortBy] = useState<"recent" | "name" | "status">("recent");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [interactionTab, setInteractionTab] = useState<"NAO_INTERAGIDO" | "INTERAGIDO" | "TODOS">("TODOS");
+
+  // Lê os filtros vindos por query string (ex: link de um card do /crm)
+  // uma única vez, ao montar a página.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("status");
+    const contactStatus = params.get("contactStatus");
+    const tab = params.get("tab");
+    const followUp = params.get("followUp");
+    const outcome = params.get("outcome");
+    const blocked = params.get("blocked");
+    const todayType = params.get("todayType");
+
+    if (status) setStatusFilter(status.split(","));
+    if (contactStatus) setContactStatusFilter(contactStatus.split(","));
+    if (tab === "NAO_INTERAGIDO" || tab === "INTERAGIDO" || tab === "TODOS") {
+      setInteractionTab(tab);
+    }
+    if (followUp === "1") setFollowUpFilter(true);
+    if (outcome === "success" || outcome === "failure") setOutcomeFilter(outcome);
+    if (blocked === "1") setBlockedFilter(true);
+    if (todayType) setTodayFilter({ type: todayType });
+  }, []);
 
   const fetchClients = useCallback(() => {
     setLoading(true);
@@ -153,6 +182,13 @@ export default function ClientsPage() {
     if (interestFilter.length > 0) params.append("interestType", interestFilter.join(","));
     if (investorFilter.length > 0) params.append("investorProfile", investorFilter.join(","));
     if (sourceFilter.length > 0) params.append("source", sourceFilter.join(","));
+    if (followUpFilter) params.append("followUp", "1");
+    if (outcomeFilter) params.append("outcome", outcomeFilter);
+    if (blockedFilter) params.append("blocked", "1");
+    if (todayFilter) {
+      params.append("today", "1");
+      params.append("todayType", todayFilter.type);
+    }
 
     fetch(`/api/clients?${params.toString()}`)
       .then((res) => res.json())
@@ -178,6 +214,10 @@ export default function ClientsPage() {
     investorFilter,
     sourceFilter,
     dateFilter,
+    followUpFilter,
+    outcomeFilter,
+    blockedFilter,
+    todayFilter,
   ]);
 
   useEffect(() => {

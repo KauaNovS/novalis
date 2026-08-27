@@ -150,14 +150,20 @@ function StatCard({
   label,
   value,
   accent,
+  href,
 }: {
   icon: any;
   label: string;
   value: number | string;
   accent: string;
+  href?: string;
 }) {
-  return (
-    <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-4 flex items-center gap-3">
+  const content = (
+    <div
+      className={`bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-4 flex items-center gap-3 ${
+        href ? "hover:border-gray-600 transition cursor-pointer" : ""
+      }`}
+    >
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${accent}`}>
         <Icon size={18} strokeWidth={1.5} />
       </div>
@@ -167,6 +173,11 @@ function StatCard({
       </div>
     </div>
   );
+
+  if (href) {
+    return <Link href={href}>{content}</Link>;
+  }
+  return content;
 }
 
 function DistributionBar({
@@ -490,36 +501,47 @@ export default function CRMPage() {
             <div className="space-y-6">
               {/* Cards principais */}
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                <StatCard icon={Users} label="Leads" value={dashboard.totals.totalLeads} accent="bg-gray-500/15 text-gray-300" />
+                <StatCard
+                  icon={Users}
+                  label="Leads"
+                  value={dashboard.totals.totalLeads}
+                  accent="bg-gray-500/15 text-gray-300"
+                  href="/clients?status=LEAD"
+                />
                 <StatCard
                   icon={UserCheck}
                   label="Contactados"
                   value={dashboard.totals.totalContacted}
                   accent="bg-blue-500/15 text-blue-300"
+                  href="/clients?tab=INTERAGIDO"
                 />
                 <StatCard
                   icon={Repeat}
                   label="Em Follow-up"
                   value={dashboard.totals.clientsInFollowUp}
                   accent="bg-amber-500/15 text-amber-300"
+                  href="/clients?followUp=1"
                 />
                 <StatCard
                   icon={Calendar}
                   label="Reuniões agendadas"
                   value={dashboard.totals.meetingsScheduled}
                   accent="bg-purple-500/15 text-purple-300"
+                  href="/clients?contactStatus=REUNIAO_AGENDADA"
                 />
                 <StatCard
                   icon={CheckCircle2}
                   label="Sucesso"
                   value={dashboard.totals.successCount}
                   accent="bg-emerald-500/15 text-emerald-300"
+                  href="/clients?outcome=success"
                 />
                 <StatCard
                   icon={XCircle}
                   label="Falha"
                   value={dashboard.totals.failureCount}
                   accent="bg-rose-500/15 text-rose-300"
+                  href="/clients?outcome=failure"
                 />
               </div>
 
@@ -530,26 +552,32 @@ export default function CRMPage() {
                   label="Ligações hoje (por cliente)"
                   value={dashboard.today.calls}
                   accent="bg-blue-500/15 text-blue-300"
+                  href="/clients?todayType=CALL_ANY"
                 />
                 <StatCard
                   icon={Send}
                   label="Mensagens hoje (por cliente)"
                   value={dashboard.today.messages}
                   accent="bg-emerald-500/15 text-emerald-300"
+                  href="/clients?todayType=WHATSAPP_MSG"
                 />
                 <StatCard
                   icon={Clock}
                   label="Followups hoje (por cliente)"
                   value={dashboard.today.followups}
                   accent="bg-amber-500/15 text-amber-300"
+                  href="/clients?todayType=FUP"
                 />
               </div>
 
               {dashboard.totals.blockedCount > 0 && (
-                <div className="rounded-xl bg-rose-500/10 border border-rose-500/30 px-4 py-3 text-sm text-rose-400 flex items-center gap-2">
+                <Link
+                  href="/clients?blocked=1"
+                  className="rounded-xl bg-rose-500/10 border border-rose-500/30 px-4 py-3 text-sm text-rose-400 flex items-center gap-2 hover:border-rose-500/60 transition"
+                >
                   <Ban size={14} />
                   {dashboard.totals.blockedCount} cliente(s) bloquearam contato ao longo do histórico.
-                </div>
+                </Link>
               )}
 
               {/* Tendência */}
