@@ -24,7 +24,7 @@ interface Projection { cenario: string; valor: string; }
 interface CompItem { asset: string; rentabilidade: string; source: string; }
 interface Financing { taxaMediaJuros: string; taxaEfetiva: string; ltv: string; prazoMaximo: string; volumeUltimos12m: string; fonte: string; }
 interface NewsItem { title: string; url: string; source: string; }
-interface Timeline { selic: {ano:string;valor:number}[]; ipca: {ano:string;valor:number}[]; incc: {ano:string;valor:number}[]; }
+interface Timeline { selic: {ano:string;valor:number}[]; ipca: {ano:string;valor:number}[]; incc: {ano:string;valor:number}[]; cdi: {ano:string;valor:number}[]; }
 
 const IND_COLORS: Record<string, string> = {
   selic: "#60a5fa", ipca: "#f87171", incc: "#a78bfa", cdi: "#34d399"
@@ -64,7 +64,7 @@ export default function MarketIntelligencePage() {
   const [error, setError] = useState("");
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTimeline, setActiveTimeline] = useState<"selic" | "ipca" | "incc">("selic");
+  const [activeTimeline, setActiveTimeline] = useState<"selic" | "ipca" | "incc" | "cdi">("selic");
 
   const fetchData = async () => {
     setLoading(true); setError("");
@@ -196,7 +196,7 @@ export default function MarketIntelligencePage() {
               <p className="text-xs text-gray-600 mt-0.5">Clique num indicador acima para ver o gráfico detalhado</p>
             </div>
             <div className="flex gap-2">
-              {(["selic", "ipca", "incc"] as const).map(key => (
+              {(["selic", "ipca", "incc", "cdi"] as const).map(key => (
                 <button key={key} onClick={() => setActiveTimeline(key)}
                   className={`px-3 py-1 rounded-lg text-xs font-medium transition border ${
                     activeTimeline === key ? "border-transparent" : "border-[#2a2a2a] text-gray-500 hover:text-gray-300"}`}
