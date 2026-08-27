@@ -18,11 +18,12 @@ const META = {
 };
 
 const MARCOS = [
-  { ano: "2002", desc: "Crise eleitoral", valor: 25 },
+  { ano: "2002", desc: "Crise eleitoral – Selic 26%" },
   { ano: "2008", desc: "Crise subprime" },
-  { ano: "2016", desc: "Impeachment" },
-  { ano: "2020", desc: "COVID – mínima histórica" },
+  { ano: "2015", desc: "Recessão – Selic 14,25%" },
+  { ano: "2020", desc: "COVID – Selic 2%" },
   { ano: "2022", desc: "Alta pós-pandemia" },
+  { ano: "2024", desc: "Ciclo restritivo atual" },
 ];
 
 export default function IndicadorDetailPage() {
