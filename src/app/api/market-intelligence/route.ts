@@ -16,8 +16,8 @@ async function fetchSerie(code: number, months = 14): Promise<any[]> {
   } catch { return []; }
 }
 
-async function fetchSerieHistorico(code: number): Promise<any[]> {
-  const url = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${code}/dados?formato=json&dataInicial=01/01/2000&dataFinal=${fmtBACEN(new Date())}`;
+async function fetchSerieHistorico(code: number, from = '01/01/2000'): Promise<any[]> {
+  const url = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${code}/dados?formato=json&dataInicial=${from}&dataFinal=${fmtBACEN(new Date())}`;
   try {
     const res = await fetch(url, { next: { revalidate: 86400 } });
     if (!res.ok) return [];
@@ -34,14 +34,12 @@ function lastVal(arr: any[]): number | null {
   return isNaN(n) ? null : n;
 }
 function lastDate(arr: any[]): string {
-  if (!arr || arr.length === 0) return '';
-  return arr[arr.length - 1]?.data || '';
+  return arr?.[arr.length - 1]?.data || '';
 }
 function calcAcum12m(arr: any[]): number | null {
   if (!arr || arr.length < 2) return null;
-  const last12 = arr.slice(-12);
   let acum = 1;
-  for (const item of last12) {
+  for (const item of arr.slice(-12)) {
     const v = parseFloat(String(item.valor).replace(',', '.'));
     if (!isNaN(v)) acum *= (1 + v / 100);
   }
@@ -53,44 +51,65 @@ function fmt(v: number | null, digits = 2): string {
 }
 function ultimos12Meses(arr: any[]): { mes: string; valor: number }[] {
   return arr.slice(-12).map(item => ({
-    mes: String(item.data || '').split('/').slice(0,2).join('/'),
+    mes: String(item.data || '').split('/').slice(0, 2).join('/'),
     valor: parseFloat(String(item.valor).replace(',', '.')),
   })).filter(x => !isNaN(x.valor));
 }
+
+// Histórico anual: pega o ÚLTIMO valor de cada ano
 function anualizarHistorico(arr: any[]): { ano: string; valor: number }[] {
   const porAno: Record<string, number> = {};
   for (const item of arr) {
     const partes = String(item.data || '').split('/');
     const ano = partes[2];
-    if (ano) {
-      const v = parseFloat(String(item.valor).replace(',', '.'));
-      if (!isNaN(v)) porAno[ano] = v;
-    }
+    if (!ano) continue;
+    const v = parseFloat(String(item.valor).replace(',', '.'));
+    if (!isNaN(v)) porAno[ano] = v;
   }
   return Object.entries(porAno)
     .map(([ano, valor]) => ({ ano, valor }))
     .sort((a, b) => Number(a.ano) - Number(b.ano));
 }
 
+// Para Selic % a.a.: converter mensal para anual acumulado
+function anualizarMensalParaAnual(arr: any[]): { ano: string; valor: number }[] {
+  // Agrupa por ano e calcula acumulado anual de taxas mensais
+  const porAno: Record<string, number[]> = {};
+  for (const item of arr) {
+    const partes = String(item.data || '').split('/');
+    const ano = partes[2];
+    if (!ano) continue;
+    const v = parseFloat(String(item.valor).replace(',', '.'));
+    if (!isNaN(v)) {
+      if (!porAno[ano]) porAno[ano] = [];
+      porAno[ano].push(v);
+    }
+  }
+  return Object.entries(porAno)
+    .map(([ano, vals]) => {
+      // Acumulado anual a partir das taxas mensais
+      let acum = 1;
+      for (const v of vals) acum *= (1 + v / 100);
+      return { ano, valor: parseFloat(((acum - 1) * 100).toFixed(2)) };
+    })
+    .sort((a, b) => Number(a.ano) - Number(b.ano));
+}
+
 export async function GET(req: NextRequest) {
   try {
-    // Séries BACEN:
-    // 432  = Meta Selic % a.a. (COPOM)
-    // 4390 = Selic acumulada no mês % a.m.
-    // 433  = IPCA % mensal
-    // 13522 = IPCA acumulado 12 meses
-    // 192  = INCC % mensal
-    // 4391 = CDI % a.m.
-    // 196  = Poupança % a.m.
-    // 4464 = Crédito imobiliário R$ mi
-
+    // Séries recentes (últimos 14 meses)
     const [
-      selicMetaArr, selicMensalArr,
-      ipcaMensalArr, ipcaAnualArr,
-      inccArr, cdiArr, poupArr, creditoArr
+      selicMetaArr,   // 432  = Meta Selic % a.a. (COPOM) — valor mais conhecido
+      selicMensalArr, // 1178 = Selic acumulada no mês % a.m.
+      ipcaMensalArr,  // 433  = IPCA % mensal
+      ipcaAnualArr,   // 13522 = IPCA acumulado 12 meses
+      inccArr,        // 192  = INCC % mensal
+      cdiArr,         // 4391 = CDI % a.m.
+      poupArr,        // 196  = Poupança % a.m.
+      creditoArr,     // 4464 = Crédito imobiliário
     ] = await Promise.all([
       fetchSerie(432, 3),
-      fetchSerie(4390, 14),
+      fetchSerie(1178, 14),
       fetchSerie(433, 14),
       fetchSerie(13522, 3),
       fetchSerie(192, 14),
@@ -99,36 +118,41 @@ export async function GET(req: NextRequest) {
       fetchSerie(4464, 14),
     ]);
 
-    // Histórico desde 2000
-    const [selicHist, ipcaHist, inccHist] = await Promise.all([
-      fetchSerieHistorico(432),
-      fetchSerieHistorico(433),
-      fetchSerieHistorico(192),
+    // Histórico desde 2000 — séries mensais, convertemos para anual
+    // 1178 = Selic mensal (desde 1986) → acumula por ano → % a.a.
+    // 12   = CDI mensal acumulado (desde 1986) → acumula por ano → % a.a.
+    // 433  = IPCA mensal → média anual
+    // 192  = INCC mensal → acumula por ano
+    const [selicHistMensal, cdiHistMensal, ipcaHistMensal, inccHistMensal] = await Promise.all([
+      fetchSerieHistorico(1178),  // Selic mensal → anualizar
+      fetchSerieHistorico(12),    // CDI mensal → anualizar
+      fetchSerieHistorico(433),   // IPCA mensal → anualizar
+      fetchSerieHistorico(192),   // INCC mensal → anualizar
     ]);
 
     // Valores atuais
-    const selicAnual  = lastVal(selicMetaArr);   // % a.a. direto
+    const selicAnual  = lastVal(selicMetaArr);    // % a.a. direto
     const selicMensal = lastVal(selicMensalArr);  // % a.m.
     const ipcaMensal  = lastVal(ipcaMensalArr);
     const ipcaAnual   = lastVal(ipcaAnualArr) ?? calcAcum12m(ipcaMensalArr);
     const inccMensal  = lastVal(inccArr);
     const inccAnual   = calcAcum12m(inccArr);
     const cdiMensal   = lastVal(cdiArr);
-    const cdiAnual    = cdiMensal != null ? (Math.pow(1 + cdiMensal/100, 12) - 1)*100 : null;
+    const cdiAnual    = cdiMensal != null ? (Math.pow(1 + cdiMensal / 100, 12) - 1) * 100 : null;
     const poupMensal  = lastVal(poupArr);
-    const poupAnual   = poupMensal != null ? (Math.pow(1 + poupMensal/100, 12) - 1)*100 : null;
+    const poupAnual   = poupMensal != null ? (Math.pow(1 + poupMensal / 100, 12) - 1) * 100 : null;
 
     const indicators = [
       {
         id: 'selic',
         title: 'Taxa Selic (meta)',
-        valueMes: selicMensal != null ? fmt(selicMensal) + ' a.m.' : (selicAnual != null ? fmt(selicAnual/12) + ' a.m.' : '~1,07% a.m.'),
-        valueAno: selicAnual != null ? fmt(selicAnual) + ' a.a.' : '14,75% a.a.',
+        valueMes: selicMensal != null ? fmt(selicMensal) + ' a.m.' : fmt(selicAnual ? selicAnual / 12 : null) + ' a.m.',
+        valueAno: fmt(selicAnual) + ' a.a.',
         change: selicAnual != null && selicAnual > 12 ? '⬆ Restritiva' : '⬇ Expansionista',
-        direction: (selicAnual != null && selicAnual > 12 ? 'up' : 'down') as 'up'|'down'|'neutral',
+        direction: (selicAnual != null && selicAnual > 12 ? 'up' : 'down') as 'up' | 'down' | 'neutral',
         source: 'Banco Central do Brasil',
-        lastUpdate: lastDate(selicMetaArr) || lastDate(selicMensalArr) || fmtBACEN(new Date()),
-        grafico12m: ultimos12Meses(selicMensalArr.length > 0 ? selicMensalArr : selicMetaArr),
+        lastUpdate: lastDate(selicMetaArr) || lastDate(selicMensalArr),
+        grafico12m: ultimos12Meses(selicMensalArr),
       },
       {
         id: 'ipca',
@@ -136,7 +160,7 @@ export async function GET(req: NextRequest) {
         valueMes: fmt(ipcaMensal) + ' a.m.',
         valueAno: fmt(ipcaAnual) + ' (12m)',
         change: ipcaAnual != null && ipcaAnual > 4.5 ? '⬆ Acima da meta' : '✓ Na meta',
-        direction: (ipcaAnual != null && ipcaAnual > 4.5 ? 'up' : 'neutral') as 'up'|'down'|'neutral',
+        direction: (ipcaAnual != null && ipcaAnual > 4.5 ? 'up' : 'neutral') as 'up' | 'down' | 'neutral',
         source: 'IBGE / BACEN',
         lastUpdate: lastDate(ipcaMensalArr),
         grafico12m: ultimos12Meses(ipcaMensalArr),
@@ -147,7 +171,7 @@ export async function GET(req: NextRequest) {
         valueMes: fmt(inccMensal) + ' a.m.',
         valueAno: fmt(inccAnual) + ' (12m)',
         change: 'Custo da construção',
-        direction: 'neutral' as 'up'|'down'|'neutral',
+        direction: 'neutral' as 'up' | 'down' | 'neutral',
         source: 'FGV / BACEN',
         lastUpdate: lastDate(inccArr),
         grafico12m: ultimos12Meses(inccArr),
@@ -158,17 +182,19 @@ export async function GET(req: NextRequest) {
         valueMes: fmt(cdiMensal) + ' a.m.',
         valueAno: fmt(cdiAnual) + ' a.a.',
         change: 'Referência renda fixa',
-        direction: 'neutral' as 'up'|'down'|'neutral',
+        direction: 'neutral' as 'up' | 'down' | 'neutral',
         source: 'BACEN',
         lastUpdate: lastDate(cdiArr),
         grafico12m: ultimos12Meses(cdiArr),
       },
     ];
 
+    // Histórico anual desde 2000 — Selic e CDI acumulados por ano a partir de séries mensais
     const timeline = {
-      selic: anualizarHistorico(selicHist),
-      ipca:  anualizarHistorico(ipcaHist),
-      incc:  anualizarHistorico(inccHist),
+      selic: anualizarMensalParaAnual(selicHistMensal),
+      ipca:  anualizarMensalParaAnual(ipcaHistMensal),
+      incc:  anualizarMensalParaAnual(inccHistMensal),
+      cdi:   anualizarMensalParaAnual(cdiHistMensal),
     };
 
     const inccRef = inccAnual ?? 5.5;
@@ -178,24 +204,24 @@ export async function GET(req: NextRequest) {
     const projections = {
       metodologia: 'Média INCC + IPCA acumulados 12 meses + prêmio de liquidez',
       cenarios: [
-        { cenario: '🐻 Conservador',       valor: fmt(base * 0.8) },
+        { cenario: '🐻 Conservador',        valor: fmt(base * 0.8) },
         { cenario: '📊 Base (INCC+IPCA/2)', valor: fmt(base) },
-        { cenario: '🚀 Otimista',           valor: fmt(base * 1.3) },
-        { cenario: '🏙️ Lançamento SP/RJ',  valor: fmt(base * 1.6) },
+        { cenario: '🚀 Otimista',            valor: fmt(base * 1.3) },
+        { cenario: '🏙️ Lançamento SP/RJ',   valor: fmt(base * 1.6) },
       ],
     };
 
     const selicRef = selicAnual ?? 14.75;
-    const cdiRef   = cdiAnual   ?? 13.86;
-    const poupRef  = poupAnual  ?? 8.34;
+    const cdiRef   = cdiAnual ?? 13.86;
+    const poupRef  = poupAnual ?? 8.34;
 
     const investmentComparison = [
-      { asset: 'Imóveis (projeção base)',    rentabilidade: fmt(base),           source: 'INCC+IPCA · Novalis' },
-      { asset: 'Selic / Tesouro Selic',      rentabilidade: fmt(selicRef),       source: 'BACEN' },
-      { asset: 'CDB 100% CDI (líq. IR)',     rentabilidade: fmt(cdiRef * 0.85),  source: 'CDI – 15% IR' },
-      { asset: 'Poupança',                   rentabilidade: fmt(poupRef),         source: 'BACEN' },
-      { asset: 'FII (IFIX médio histórico)', rentabilidade: '~12,0%',            source: 'B3 – estimativa' },
-      { asset: 'IPCA+ 6%',                  rentabilidade: fmt(ipcaRef + 6),    source: 'Tesouro Direto' },
+      { asset: 'Imóveis (projeção base)',    rentabilidade: fmt(base),          source: 'INCC+IPCA · Novalis' },
+      { asset: 'Selic / Tesouro Selic',      rentabilidade: fmt(selicRef),      source: 'BACEN' },
+      { asset: 'CDB 100% CDI (líq. IR)',     rentabilidade: fmt(cdiRef * 0.85), source: 'CDI – 15% IR' },
+      { asset: 'Poupança',                   rentabilidade: fmt(poupRef),        source: 'BACEN' },
+      { asset: 'FII (IFIX médio histórico)', rentabilidade: '~12,0%',           source: 'B3 – estimativa' },
+      { asset: 'IPCA+ 6%',                  rentabilidade: fmt(ipcaRef + 6),   source: 'Tesouro Direto' },
     ];
 
     const financing = {
