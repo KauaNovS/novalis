@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
       byContactStatusRaw,
       interactions,
       recentInteractions,
+      blockedClientRows,
     ] = await Promise.all([
       prisma.client.count(),
       prisma.client.groupBy({ by: ['status'], _count: true }),
@@ -42,6 +43,9 @@ export async function GET(req: NextRequest) {
           clientId: true,
           type: true,
           contactType: true,
+          success: true,
+          blocked: true,
+          answered: true,
           createdAt: true,
         },
       }),
@@ -50,23 +54,29 @@ export async function GET(req: NextRequest) {
         take: 20,
         include: { client: { select: { id: true, name: true } } },
       }),
+      // "ao longo do histórico" -> não limitado aos 90 dias da query acima
+      prisma.clientInteraction.findMany({
+        where: { blocked: true },
+        select: { clientId: true },
+        distinct: ['clientId'],
+      }),
     ]);
 
-    const byStatus = byStatusRaw.map((r) => ({ key: r.status, count: r._count }));
-    const byStage = byStageRaw.map((r) => ({ key: r.stage, count: r._count }));
-    const byContactStatus = byContactStatusRaw.map((r) => ({
+    const byStatus = byStatusRaw.map((r: any) => ({ key: r.status, count: r._count }));
+    const byStage = byStageRaw.map((r: any) => ({ key: r.stage, count: r._count }));
+    const byContactStatus = byContactStatusRaw.map((r: any) => ({
       key: r.contactStatus || 'NAO_CONTACTADO',
       count: r._count,
     }));
 
-    const naoContactado = byContactStatus.find((c) => c.key === 'NAO_CONTACTADO')?.count || 0;
-    const totalLeads = byStatus.find((s) => s.key === 'LEAD')?.count || 0;
+    const naoContactado = byContactStatus.find((c: any) => c.key === 'NAO_CONTACTADO')?.count || 0;
+    const totalLeads = byStatus.find((s: any) => s.key === 'LEAD')?.count || 0;
     const totalContacted = totalClients - naoContactado;
-    const meetingsScheduled = byContactStatus.find((c) => c.key === 'REUNIAO_AGENDADA')?.count || 0;
+    const meetingsScheduled = byContactStatus.find((c: any) => c.key === 'REUNIAO_AGENDADA')?.count || 0;
 
-    const callRows = interactions.filter((i) => i.type === 'CALL' || i.type === 'WHATSAPP_CALL');
-    const msgRows = interactions.filter((i) => i.type === 'WHATSAPP_MSG');
-    const fupRows = interactions.filter((i) => i.contactType === 'FUP');
+    const callRows = interactions.filter((i: any) => i.type === 'CALL' || i.type === 'WHATSAPP_CALL');
+    const msgRows = interactions.filter((i: any) => i.type === 'WHATSAPP_MSG');
+    const fupRows = interactions.filter((i: any) => i.contactType === 'FUP');
 
     const dedupedCalls = dedupeByClientDay(callRows);
     const dedupedMsgs = dedupeByClientDay(msgRows);
@@ -77,12 +87,16 @@ export async function GET(req: NextRequest) {
     const messagesToday = dedupedMsgs.filter((d) => d.day === todayKey).length;
     const followupsToday = dedupedFups.filter((d) => d.day === todayKey).length;
 
-    const clientsInFollowUp = new Set(fupRows.map((f) => f.clientId)).size;
+    const clientsInFollowUp = new Set(fupRows.map((f: any) => f.clientId)).size;
 
-    // Como não há campos de resultado, definimos 0 para esses totais
-    const successCount = 0;
-    const failureCount = 0;
-    const blockedCount = 0;
+    // Antes fixos em 0 com o comentário "não há campos de resultado" — os
+    // campos existem no schema (success/blocked), só não estavam sendo
+    // usados. success/failure são sobre os últimos 90 dias (mesma janela
+    // do resto do dashboard); blocked é "ao longo do histórico" (sem
+    // limite de data), como o texto do card já dizia.
+    const successCount = interactions.filter((i: any) => i.success === true).length;
+    const failureCount = interactions.filter((i: any) => i.success === false).length;
+    const blockedCount = blockedClientRows.length;
 
     const trend: { date: string; calls: number; messages: number; followups: number }[] = [];
     for (let i = 6; i >= 0; i--) {
@@ -117,12 +131,15 @@ export async function GET(req: NextRequest) {
       byStage,
       byContactStatus,
       trend,
-      timeline: recentInteractions.map((i) => ({
+      timeline: recentInteractions.map((i: any) => ({
         id: i.id,
         clientId: i.client.id,
         clientName: i.client.name,
         type: i.type,
-        contactType: i.contactType,
+        contactMode: i.contactType,
+        answered: i.answered,
+        success: i.success,
+        blocked: i.blocked,
         reason: i.reason,
         notes: i.notes,
         createdAt: i.createdAt,

@@ -161,6 +161,18 @@ export default function UnitDetailPage() {
     );
   }
 
+  if (!unit) {
+    return (
+      <main className="min-h-screen bg-[#0f0f0f] p-6 md:p-8">
+        <div className="max-w-3xl mx-auto">
+          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-3xl p-8 text-center">
+            <p className="text-rose-400">Unidade não encontrada</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   const statusColor =
     unit.status === "AVAILABLE"
       ? "#34d399"

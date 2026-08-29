@@ -17,6 +17,13 @@ export async function GET(req: NextRequest) {
     const investorProfile = searchParams.get('investorProfile') || undefined;
     const source = searchParams.get('source') || undefined;
     const date = searchParams.get('date') || undefined;
+    // Filtros derivados de interações (usados pelos cards clicáveis do
+    // dashboard /crm, que não mapeiam para um campo direto do Client).
+    const followUp = searchParams.get('followUp') || undefined; // "1" -> tem interação FUP
+    const outcome = searchParams.get('outcome') || undefined; // "success" | "failure"
+    const blocked = searchParams.get('blocked') || undefined; // "1" -> tem interação com blocked=true
+    const todayType = searchParams.get('todayType') || undefined; // CALL | WHATSAPP_CALL | WHATSAPP_MSG | FUP, combinado com "today=1"
+    const today = searchParams.get('today') || undefined; // "1"
 
     const where: any = {};
 
@@ -108,6 +115,59 @@ export async function GET(req: NextRequest) {
       where.createdAt = {
         gte: startOfDay,
         lte: endOfDay,
+      };
+    }
+
+    // Follow-up: cliente com pelo menos uma interação de contactType FUP
+    // (mesma definição usada em /api/crm-dashboard para "Em Follow-up").
+    if (followUp === '1') {
+      where.interactions = {
+        ...(where.interactions || {}),
+        some: { ...(where.interactions?.some || {}), contactType: 'FUP' },
+      };
+    }
+
+    // Sucesso/Falha: cliente com pelo menos uma interação nos últimos 90
+    // dias com o resultado pedido (mesma janela do card do dashboard).
+    if (outcome === 'success' || outcome === 'failure') {
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+      where.interactions = {
+        ...(where.interactions || {}),
+        some: {
+          ...(where.interactions?.some || {}),
+          success: outcome === 'success',
+          createdAt: { gte: ninetyDaysAgo },
+        },
+      };
+    }
+
+    // Bloqueado: cliente com pelo menos uma interação marcada como
+    // blocked=true, sem limite de data (mesma definição do card
+    // "bloquearam contato ao longo do histórico" no dashboard).
+    if (blocked === '1') {
+      where.interactions = {
+        ...(where.interactions || {}),
+        some: { ...(where.interactions?.some || {}), blocked: true },
+      };
+    }
+
+    // Atividade de hoje: cliente com interação de um tipo específico
+    // registrada hoje (cards "Ligações/Mensagens/Followups hoje").
+    if (today === '1' && todayType) {
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const todayFilter: any = { createdAt: { gte: startOfToday } };
+      if (todayType === 'FUP') {
+        todayFilter.contactType = 'FUP';
+      } else if (todayType === 'CALL_ANY') {
+        todayFilter.type = { in: ['CALL', 'WHATSAPP_CALL'] };
+      } else {
+        todayFilter.type = todayType;
+      }
+      where.interactions = {
+        ...(where.interactions || {}),
+        some: { ...(where.interactions?.some || {}), ...todayFilter },
       };
     }
 

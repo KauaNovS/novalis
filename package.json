@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && prisma db push --accept-data-loss --skip-generate && node prisma/seed.js && next build",
     "start": "next start",
     "lint": "next lint",
+    "postinstall": "prisma generate",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:seed": "node prisma/seed.js"
@@ -29,7 +30,8 @@
     "tailwind-merge": "^2.2.0",
     "tesseract.js": "^5.0.3",
     "xlsx": "^0.18.5",
-    "zod": "^3.22.0"
+    "zod": "^3.22.0",
+    "recharts": "^2.12.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

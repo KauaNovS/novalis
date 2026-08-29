@@ -133,11 +133,41 @@ export default function ClientsPage() {
   const [investorFilter, setInvestorFilter] = useState<string[]>([]);
   const [sourceFilter, setSourceFilter] = useState<string[]>([]);
   const [dateFilter, setDateFilter] = useState("");
+  // Filtros vindos dos cards clicáveis do dashboard (/crm) — não têm UI
+  // própria aqui, só chegam via query string do link.
+  const [followUpFilter, setFollowUpFilter] = useState(false);
+  const [outcomeFilter, setOutcomeFilter] = useState<"success" | "failure" | "">("");
+  const [blockedFilter, setBlockedFilter] = useState(false);
+  const [todayFilter, setTodayFilter] = useState<{ type: string } | null>(null);
 
   // UI state
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [sortBy, setSortBy] = useState<"recent" | "name" | "status">("recent");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [interactionTab, setInteractionTab] = useState<"NAO_INTERAGIDO" | "INTERAGIDO" | "TODOS">("TODOS");
+
+  // Lê os filtros vindos por query string (ex: link de um card do /crm)
+  // uma única vez, ao montar a página.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("status");
+    const contactStatus = params.get("contactStatus");
+    const tab = params.get("tab");
+    const followUp = params.get("followUp");
+    const outcome = params.get("outcome");
+    const blocked = params.get("blocked");
+    const todayType = params.get("todayType");
+
+    if (status) setStatusFilter(status.split(","));
+    if (contactStatus) setContactStatusFilter(contactStatus.split(","));
+    if (tab === "NAO_INTERAGIDO" || tab === "INTERAGIDO" || tab === "TODOS") {
+      setInteractionTab(tab);
+    }
+    if (followUp === "1") setFollowUpFilter(true);
+    if (outcome === "success" || outcome === "failure") setOutcomeFilter(outcome);
+    if (blocked === "1") setBlockedFilter(true);
+    if (todayType) setTodayFilter({ type: todayType });
+  }, []);
 
   const fetchClients = useCallback(() => {
     setLoading(true);
@@ -152,6 +182,13 @@ export default function ClientsPage() {
     if (interestFilter.length > 0) params.append("interestType", interestFilter.join(","));
     if (investorFilter.length > 0) params.append("investorProfile", investorFilter.join(","));
     if (sourceFilter.length > 0) params.append("source", sourceFilter.join(","));
+    if (followUpFilter) params.append("followUp", "1");
+    if (outcomeFilter) params.append("outcome", outcomeFilter);
+    if (blockedFilter) params.append("blocked", "1");
+    if (todayFilter) {
+      params.append("today", "1");
+      params.append("todayType", todayFilter.type);
+    }
 
     fetch(`/api/clients?${params.toString()}`)
       .then((res) => res.json())
@@ -177,6 +214,10 @@ export default function ClientsPage() {
     investorFilter,
     sourceFilter,
     dateFilter,
+    followUpFilter,
+    outcomeFilter,
+    blockedFilter,
+    todayFilter,
   ]);
 
   useEffect(() => {
@@ -243,7 +284,19 @@ export default function ClientsPage() {
     }
   };
 
-  const sortedClients = [...clients].sort((a, b) => {
+  const isInteracted = (c: Client) =>
+    !!c.contactStatus && c.contactStatus !== "NAO_CONTACTADO";
+
+  const tabFilteredClients = clients.filter((c) => {
+    if (interactionTab === "NAO_INTERAGIDO") return !isInteracted(c);
+    if (interactionTab === "INTERAGIDO") return isInteracted(c);
+    return true;
+  });
+
+  const naoInteragidoCount = clients.filter((c) => !isInteracted(c)).length;
+  const interagidoCount = clients.filter((c) => isInteracted(c)).length;
+
+  const sortedClients = [...tabFilteredClients].sort((a, b) => {
     if (sortBy === "name") return a.name.localeCompare(b.name);
     if (sortBy === "status") return (a.status || "").localeCompare(b.status || "");
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -267,6 +320,36 @@ export default function ClientsPage() {
             <Plus size={16} strokeWidth={1.5} />
             Novo Cliente
           </Link>
+        </div>
+
+        {/* Abas: não interagi / já interagi / todos */}
+        <div className="flex gap-2 mb-6 border-b border-[#2a2a2a]">
+          {[
+            { key: "NAO_INTERAGIDO" as const, label: "Não interagi", count: naoInteragidoCount },
+            { key: "INTERAGIDO" as const, label: "Já interagi", count: interagidoCount },
+            { key: "TODOS" as const, label: "Todos", count: clients.length },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setInteractionTab(tab.key)}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition -mb-px ${
+                interactionTab === tab.key
+                  ? "border-blue-500 text-white"
+                  : "border-transparent text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              {tab.label}
+              <span
+                className={`ml-2 text-xs rounded-full px-1.5 py-0.5 ${
+                  interactionTab === tab.key
+                    ? "bg-blue-500/20 text-blue-400"
+                    : "bg-[#2a2a2a] text-gray-500"
+                }`}
+              >
+                {tab.count}
+              </span>
+            </button>
+          ))}
         </div>
 
         {/* Busca principal */}

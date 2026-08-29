@@ -1,0 +1,428 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// INCORPORADORAS
+// ============================================
+model Incorporadora {
+  id                String   @id @default(uuid())
+  nome              String   @unique
+  nomeCurto         String?
+  cnpj              String?  @unique
+  website           String?
+  telefone          String?
+  email             String?
+  endereco          String?
+  cidade            String?
+  estado            String?
+  pais              String   @default("Brasil")
+  posicionamento    String?
+  historico         String?
+  certificacoes     String[]
+  institutos        String[]
+  parceiros         String[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relações
+  empreendimentos   Empreendimento[]
+  profissionais     Profissional[]
+
+  @@index([nome])
+  @@index([cnpj])
+}
+
+// ============================================
+// EMPREENDIMENTOS
+// ============================================
+model Empreendimento {
+  id                    String   @id @default(uuid())
+  nome                  String
+  nomeCurto             String?
+  subtitulo             String?
+  incorporadoraId       String
+  incorporadora         Incorporadora @relation(fields: [incorporadoraId], references: [id], onDelete: Cascade)
+
+  endereco              String
+  bairro                String
+  cidade                String
+  estado                String
+  cep                   String?
+  areaTerreno           Float?
+  areaConstituida       Float?
+  
+  estilo                String?
+  sistemVendas          String?
+  statusObra            String   @default("Lançamento")
+  
+  dataLancamento        DateTime?
+  entregaPrevista       DateTime?
+  
+  torres                Int      @default(1)
+  pavimentos            Int?
+  totalUnidades         Int
+  unidadesR2V           Int      @default(0)
+  unidadesHMP           Int      @default(0)
+  elevadores            Int?
+  vagas                 String?
+  
+  precoAPartir          Float?
+  precoMaximoHMP        Float?
+  precoInicialHMP       Float?
+  
+  descricao             String?
+  amenidades            String[]
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  deletedAt             DateTime?
+
+  // Relações
+  unidades              Unidade[]
+  plantas               Planta[]
+  imagens               ImagemEmpreendimento[]
+  arquitetura           Arquitetura?
+  paisagismo            Paisagismo?
+  decoracao             Decoracao?
+  lazer                 Lazer?
+  sustentabilidade      Sustentabilidade?
+  profissionais         ProfissionalEmpreendimento[]
+  importacoes           Importacao[]
+
+  @@index([incorporadoraId])
+  @@index([nome])
+  @@index([bairro])
+  @@index([statusObra])
+  @@fulltext([nome, bairro, cidade])
+}
+
+// ============================================
+// UNIDADES
+// ============================================
+model Unidade {
+  id                String   @id @default(uuid())
+  empreendimentoId  String
+  empreendimento    Empreendimento @relation(fields: [empreendimentoId], references: [id], onDelete: Cascade)
+  
+  torre             String?
+  andar             Int
+  final             Int
+  numero            String   @unique // ex: "1201"
+  
+  tipologia         TipologiaEnum @default(R2V)
+  areaMeida         Float
+  dormitorios       Int      @default(0)
+  suites            Int      @default(0)
+  vagas             Int      @default(1)
+  
+  preco             Float?
+  precoM2           Float?
+  status            StatusUnidadeEnum @default(DISPONIVEL)
+  
+  plantaId          String?
+  planta            Planta? @relation(fields: [plantaId], references: [id], onDelete: SetNull)
+  
+  características   String[]
+  observacoes       String?
+  
+  historicoPrecos   HistoricoPreco[]
+  planosPagamento   PlanoPagamento[]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([empreendimentoId, numero])
+  @@index([empreendimentoId])
+  @@index([tipologia])
+  @@index([status])
+  @@index([plantaId])
+}
+
+// ============================================
+// PLANTAS
+// ============================================
+model Planta {
+  id                String   @id @default(uuid())
+  empreendimentoId  String
+  empreendimento    Empreendimento @relation(fields: [empreendimentoId], references: [id], onDelete: Cascade)
+  
+  nome              String
+  final             Int
+  areaMeida         Float
+  tipologia         TipologiaEnum @default(R2V)
+  
+  andares           Int[]
+  dormitorios       Int      @default(0)
+  suites            Int      @default(0)
+  vagas             Int      @default(1)
+  
+  descricao         String?
+  características   String[]
+  opcao             String   @default("padrao") // "padrao", "opcao_1_suite", etc
+  
+  imagemPlanta      String?  // URL da planta baixa
+  imagemPerspectiva String?  // URL da perspectiva
+  
+  unidades          Unidade[]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([empreendimentoId, final, tipologia, opcao])
+  @@index([empreendimentoId])
+  @@index([tipologia])
+}
+
+// ============================================
+// IMAGENS
+// ============================================
+model ImagemEmpreendimento {
+  id                String   @id @default(uuid())
+  empreendimentoId  String
+  empreendimento    Empreendimento @relation(fields: [empreendimentoId], references: [id], onDelete: Cascade)
+  
+  titulo            String
+  categoria         String   // "fachada", "lazer", "decoracao", "area-comum", etc
+  url               String
+  descricao         String?
+  ordem             Int      @default(0)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([empreendimentoId])
+  @@index([categoria])
+}
+
+// ============================================
+// ARQUITETURA, PAISAGISMO, DECORAÇÃO
+// ============================================
+model Arquitetura {
+  id                String   @id @default(uuid())
+  empreendimentoId  String   @unique
+  empreendimento    Empreendimento @relation(fields: [empreendimentoId], references: [id], onDelete: Cascade)
+  
+  escritorio        String?
+  projetoArquitetonico String?
+  características   String[]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Paisagismo {
+  id                String   @id @default(uuid())
+  empreendimentoId  String   @unique
+  empreendimento    Empreendimento @relation(fields: [empreendimentoId], references: [id], onDelete: Cascade)
+  
+  escritorio        String?
+  projetoPaisagistico String?
+  características   String[]
+  areasVerdes       String[]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Decoracao {
+  id                String   @id @default(uuid())
+  empreendimentoId  String   @unique
+  empreendimento    Empreendimento @relation(fields: [empreendimentoId], references: [id], onDelete: Cascade)
+  
+  escritorio        String?
+  projetoDecoracao  String?
+  estilo            String?
+  sugestoes         String[]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Lazer {
+  id                String   @id @default(uuid())
+  empreendimentoId  String   @unique
+  empreendimento    Empreendimento @relation(fields: [empreendimentoId], references: [id], onDelete: Cascade)
+  
+  areaTotal         Float?
+  itens             String[]
+  descricao         String?
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Sustentabilidade {
+  id                String   @id @default(uuid())
+  empreendimentoId  String   @unique
+  empreendimento    Empreendimento @relation(fields: [empreendimentoId], references: [id], onDelete: Cascade)
+  
+  certificacao      String?
+  certificadora     String?
+  pilares           String[]
+  compromissos      String[]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// ============================================
+// PROFISSIONAIS
+// ============================================
+model Profissional {
+  id                String   @id @default(uuid())
+  incorporadoraId   String
+  incorporadora     Incorporadora @relation(fields: [incorporadoraId], references: [id], onDelete: Cascade)
+  
+  nome              String
+  tipo              TipoProfissionalEnum
+  especialidade     String?
+  website           String?
+  email             String?
+  
+  empreendimentos   ProfissionalEmpreendimento[]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([incorporadoraId])
+  @@index([tipo])
+}
+
+model ProfissionalEmpreendimento {
+  id                String   @id @default(uuid())
+  profissionalId    String
+  profissional      Profissional @relation(fields: [profissionalId], references: [id], onDelete: Cascade)
+  
+  empreendimentoId  String
+  empreendimento    Empreendimento @relation(fields: [empreendimentoId], references: [id], onDelete: Cascade)
+  
+  funcao            String?
+  
+  @@unique([profissionalId, empreendimentoId])
+}
+
+// ============================================
+// PREÇOS E FINANCIAMENTO
+// ============================================
+model HistoricoPreco {
+  id                String   @id @default(uuid())
+  unidadeId         String
+  unidade           Unidade @relation(fields: [unidadeId], references: [id], onDelete: Cascade)
+  
+  valor             Float
+  valorM2           Float?
+  data              DateTime @default(now())
+  fonte             String?  // "lançamento", "tabela_agosto", etc
+  
+  @@index([unidadeId])
+  @@index([data])
+}
+
+model PlanoPagamento {
+  id                String   @id @default(uuid())
+  unidadeId         String
+  unidade           Unidade @relation(fields: [unidadeId], references: [id], onDelete: Cascade)
+  
+  descricao         String?
+  entrada           Float?
+  parcelasIniciais  Int?
+  parcelasIniciais Value Float?
+  parcelasMensais   Int?
+  parcelasMensais Value Float?
+  parcelasAnuais    Int?
+  parcelasAnuais Value Float?
+  parcelaUnica      Float?
+  principal         Float?
+  financiamento     Float?
+  
+  correcaoAte       String?  // "INCC-FGV"
+  correcaoApos      String?  // "IPCA-IBGE"
+  juros             Float?   // "12% ao ano"
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([unidadeId])
+}
+
+// ============================================
+// IMPORTAÇÕES
+// ============================================
+model Importacao {
+  id                String   @id @default(uuid())
+  empreendimentoId  String
+  empreendimento    Empreendimento @relation(fields: [empreendimentoId], references: [id], onDelete: Cascade)
+  
+  tipo              TipoImportacaoEnum
+  arquivo           String
+  paginas           String?
+  metodoExtracao    String[]
+  
+  totalProcessado   Int      @default(0)
+  totalErros        Int      @default(0)
+  status            StatusImportacaoEnum @default(PENDENTE)
+  
+  resultado         String?  // JSON com detalhes
+  erro              String?
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([empreendimentoId])
+  @@index([status])
+}
+
+// ============================================
+// ENUMS
+// ============================================
+enum TipologiaEnum {
+  R2V  // Residencial 2+ quartos
+  HMP  // Habitação de Mercado Popular
+  H1Q  // Habitação 1 quarto
+  H0Q  // Habitação 0 quartos (estúdio)
+}
+
+enum StatusUnidadeEnum {
+  DISPONIVEL
+  VENDIDO
+  RESERVADO
+  INDISPONIVEL
+  BLOQUEADO
+}
+
+enum TipoProfissionalEnum {
+  ARQUITETURA
+  PAISAGISMO
+  DECORACAO
+  ENGENHARIA
+  LIGHTING
+  ACUSTICA
+  SUSTENTABILIDADE
+}
+
+enum StatusImportacaoEnum {
+  PENDENTE
+  PROCESSANDO
+  CONCLUIDO
+  ERRO
+  PARCIAL
+}
+
+enum TipoImportacaoEnum {
+  TABELAO
+  BOOK
+  ESPELHO_VENDAS
+  TABELA_PRECOS
+  TABELA_FINANCIAMENTO
+  PROFISSIONAIS
+  PLANTAS_DECORACAO
+}
