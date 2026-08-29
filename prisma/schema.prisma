@@ -198,6 +198,10 @@ model Project {
   units     Unit[]
   documents Document[]
   images    ProjectImage[]
+
+  plantas     Planta[]
+  importacoes Importacao[]
+  evidencias  ImportEvidence[]
 }
 
 model ProjectImage {
@@ -243,11 +247,23 @@ model Unit {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
+  final                          Int?
+  plantaId                       String?
+  planta                         Planta? @relation(fields: [plantaId], references: [id], onDelete: SetNull)
+  documentPricePerSquareMeter    Float?
+  calculatedPricePerSquareMeter  Float?
+  evidencias                     ImportEvidence[]
+
   priceHistory    PriceHistory[]
   statusHistory   StatusHistory[]
   deals           Deal[]
   visits          PropertyVisit[]
   unitsOfInterest UnitOfInterest[]
+
+  // @@unique([projectId, towerId, unitNumber])
+  // ↑ Adicionar isso SÓ depois de rodar scripts/normalizar_unit_numbers.js
+  //   contra o banco de produção, senão o próximo "prisma db push" pode
+  //   falhar por causa de unitNumbers duplicados já existentes.
 }
 
 model PriceHistory {
@@ -385,4 +401,75 @@ model PartnerProject {
   description String?
   status      String         @default("PENDING")
   createdAt   DateTime       @default(now())
+}
+
+model Planta {
+  id                String   @id @default(cuid())
+  projectId         String
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  nome              String
+  final             Int
+  areaM2            Float
+  tipologia         String
+  andares           Int[]
+  descricao         String?
+  caracteristicas   String   @default("[]")
+  opcao             String   @default("padrao")
+  imagemPlanta      String?
+  imagemPerspectiva String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  unidades          Unit[]
+  evidencias        ImportEvidence[]
+
+  @@unique([projectId, final, tipologia, opcao])
+  @@index([projectId])
+  @@index([tipologia])
+}
+
+model Importacao {
+  id              String   @id @default(cuid())
+  projectId       String?
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  nomeArquivo     String
+  tipo            String
+  mimeType        String?
+  status          String   @default("PENDENTE")
+  totalProcessado Int      @default(0)
+  totalErros      Int      @default(0)
+  resultado       String?
+  erro            String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  evidencias      ImportEvidence[]
+
+  @@index([projectId])
+  @@index([tipo])
+  @@index([status])
+}
+
+model ImportEvidence {
+  id           String      @id @default(cuid())
+  importacaoId String?
+  importacao   Importacao? @relation(fields: [importacaoId], references: [id], onDelete: Cascade)
+  projectId    String?
+  project      Project?    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  unitId       String?
+  unit         Unit?       @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  plantaId     String?
+  planta       Planta?     @relation(fields: [plantaId], references: [id], onDelete: Cascade)
+  campo        String
+  valor        String?
+  pagina       Int?
+  linha        Int?
+  origem       String?
+  confianca    Float?
+  metadata     String?
+  createdAt    DateTime @default(now())
+
+  @@index([importacaoId])
+  @@index([projectId])
+  @@index([unitId])
+  @@index([plantaId])
+  @@index([campo])
 }
