@@ -1,0 +1,26 @@
+import express, { Express, Request, Response, NextFunction } from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import dotenv from 'dotenv';
+import pino from 'pino';
+import intelligenceRouter from './modules/api/intelligenceRoutes.js';
+
+dotenv.config();
+const logger = pino({ level: process.env.LOG_LEVEL || 'info', transport: { target: 'pino-pretty', options: { colorize: true, ignore: 'pid,hostname' } } });
+const app: Express = express();
+const PORT = process.env.PORT || 5000;
+app.use(helmet());
+app.use(cors({ origin: process.env.CORS_ORIGINS?.split(',') || 'http://localhost:3000', credentials: true }));
+const limiter = rateLimit({ windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'), message: 'Too many requests from this IP, please try again later.' });
+app.use('/api/', limiter);
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use((req: Request, res: Response, next: NextFunction) => { const start = Date.now(); res.on('finish', () => logger.info({ method: req.method, path: req.path, status: res.statusCode, duration: `${Date.now() - start}ms` })); next(); });
+app.get('/health', (_req, res) => res.status(200).json({ status: 'ok', timestamp: new Date().toISOString(), uptime: process.uptime() }));
+app.get('/api', (_req, res) => res.json({ message: 'Novalis API', version: '1.1.0', intelligence: { tabelao: 'POST /api/import/tabelao/intelligence', ocr: 'POST /api/intelligence/ocr' } }));
+app.use('/api', intelligenceRouter);
+app.use((req, res) => res.status(404).json({ error: 'Not Found', path: req.path, method: req.method }));
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => { logger.error({ error: err.message, stack: err.stack, path: req.path }); res.status(500).json({ error: 'Internal Server Error', message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message }); });
+app.listen(PORT, () => logger.info(`🚀 Novalis API running on http://localhost:${PORT}`));
+export default app;
